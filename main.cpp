@@ -1,0 +1,303 @@
+#include <stdlib.h>
+#include <assert.h>
+#include <stdio.h>
+#include <stdint.h>
+#include "8086_log.h"
+#define DEBUG
+#define SHIFT_ARGS( ArgCount , Args ) (assert((ArgCount)>0), (ArgCount)--, *(Args)++)
+
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef int8_t s8;
+typedef int16_t s16;
+typedef int32_t s32;
+typedef int64_t s64;
+typedef s32 b32;
+
+#define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
+
+void PrintBinaryU8(u8 value)
+{
+  for(int i = 7; i>=0; i--) {
+    printf("%d", (value >> i) & 1);
+  }
+  printf("\n");
+}
+
+#define D_MASK        0b00000010
+#define W_MASK        0b00000001
+#define MOD_MASK      0b11000000
+#define REG_MASK      0b00111000
+#define RM_MASK       0b00000111
+
+const char *Al = "al";
+const char *Cl = "cl";
+const char *Dl = "dl";
+const char *Bl = "bl";
+const char *Ah = "ah";
+const char *Ch = "ch";
+const char *Dh = "dh";
+const char *Bh = "bh";
+
+const char *Ax = "ax";
+const char *Cx = "cx";
+const char *Dx = "dx";
+const char *Bx = "bx";
+const char *Sp = "sp";
+const char *Bp = "bp";
+const char *Si = "si";
+const char *Di = "di";
+
+const char *RmBxSi = "[bx + si";
+const char *RmBxDi = "[bx + di";
+const char *RmBpSi = "[bp + si";
+const char *RmBpDi = "[bp + di";
+const char *RmSi = "[si]";
+const char *RmDi = "[di]";
+const char *RmBp = "[bp]";
+const char *RmBx = "[bx]";
+
+static const char *RmLut[8] = {RmBxSi, RmBxDi, RmBpSi, RmBpDi, RmSi, RmDi, RmBp, RmBx};
+static const char *RegisterLut[16] = { Al, Cl, Dl, Bl, Ah, Ch, Dh, Bh, Ax, Cx, Dx, Bx, Sp, Bp, Si, Di };
+static const char **RegistersWide = &(RegisterLut[8]);
+static const char **RegistersSingle = RegisterLut;
+
+struct segmentedMemory_t {
+  u8 *Memory;
+  u32 Size;
+};
+
+segmentedMemory_t GiveMeMemoryFromFile( const char *FileName )
+{
+  static u8 FailedAllocationByte;
+  segmentedMemory_t Result = {};
+  FILE *File = fopen( FileName, "rb" );
+  u8 *Memory;
+  if( File )
+  {
+    fseek(File, 0, SEEK_END);
+    u32 BytesToAlloc = ftell(File);
+    rewind(File);
+    Memory = (u8 *)malloc( BytesToAlloc * sizeof(u8));
+    if(!Memory)
+    {
+      Result.Size = 0;
+      Result.Memory = &FailedAllocationByte;
+      Log( ERROR, "Failed to allocate memory");
+    } else {
+      Result.Size = BytesToAlloc;
+      fread(Memory, 1, BytesToAlloc, File);
+      Result.Memory = Memory;
+    }
+    fclose(File);
+  } else {
+    LogFatal( ERROR, "No binary provided");
+  }
+  return(Result);
+}
+
+int main( s32 ArgCount, char **Args )
+{
+
+  SHIFT_ARGS( ArgCount , Args );
+  if( ArgCount > 0)
+  {
+    char *AsmFileName = *Args;
+    segmentedMemory_t ReadIn = GiveMeMemoryFromFile( AsmFileName );
+    printf("bits 16\n");
+    for(u32 inst_i = 0; inst_i < ReadIn.Size; inst_i+=2)
+    {
+      u8 FirstEight = ReadIn.Memory[inst_i];
+      u8 SecondEight = ReadIn.Memory[inst_i+1];
+      switch( FirstEight & 0b11110000 )
+      {
+        case( 0b10000000 ):
+        {
+          printf("mov ");
+          //TODO: Register/memoryto/from register
+          if( (FirstEight & 0b00001100) == 0b00001000 )
+          {
+            u8 Dbit = FirstEight & D_MASK;
+            u8 Wbit = FirstEight & W_MASK;
+            u8 ModField = (SecondEight & MOD_MASK) >> 6;
+            u8 RegValue = (SecondEight & REG_MASK) >> 3;
+            u8 RmValue = (SecondEight & RM_MASK);
+            const char *RegStr;
+            const char *RmStr;
+            switch(ModField)
+            {
+              case(0):{
+                // 00 no displacement
+
+                if( RmValue != 5 )
+                {
+                  RmStr =  RmLut[RmValue];
+                  RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
+                  if( Dbit )
+                  {
+                    printf( "%s, %s]\n", RegStr, RmStr);
+                  }
+                  else
+                  {
+                    printf( "%s], %s\n", RmStr, RegStr);
+                  }
+                } else {
+                  //16 bit displacement
+                  s16 *DispAddr = (s16 *)&ReadIn.Memory[inst_i+2];
+                  s16 DispValue = *DispAddr;
+                  inst_i+=2;
+                  RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
+                  if( Dbit )
+                  {
+                    printf( "%s %d %d\n", RegStr, SecondEight, DispValue);
+                  }
+                  else
+                  {
+                    printf( "%d %d %s\n", SecondEight, DispValue , RegStr);
+                  }
+                }
+              }break;
+
+              // 01 8 bit displacement
+              case(1):{
+                s8 *DispAddr = (s8 *)&ReadIn.Memory[inst_i+2];
+                s8 DispValue = *DispAddr;
+                inst_i+=1;
+
+                RmStr =  RmLut[RmValue];
+                RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
+
+                if(DispValue)
+                {
+                  if( Dbit )
+                  {
+                    printf( "%s, %s + %d]\n", RegStr, RmStr, DispValue);
+                  }
+                  else
+                  {
+                    printf( "%s + %d], %s\n", RmStr, DispValue ,RegStr);
+                  }
+                }
+                else
+                {
+                  if( Dbit )
+                  {
+                    printf( "%s, %s\n", RegStr, RmStr);
+                  }
+                  else
+                  {
+                    printf( "%s, %s\n", RmStr ,RegStr);
+                  }
+                }
+              }break;
+
+              // 10 16 bit displacement
+              case(2):{
+                s16 *DispAddr = (s16 *)&ReadIn.Memory[inst_i+2];
+                s16 DispValue = *DispAddr;
+                inst_i+=2;
+                RmStr =  RmLut[RmValue];
+                RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
+                if(DispValue)
+                {
+                  if( Dbit )
+                  {
+                    printf( "%s, %s + %d]\n", RegStr, RmStr, DispValue);
+                  }
+                  else
+                  {
+                    printf( "%s + %d], %s\n", RmStr, DispValue ,RegStr);
+                  }
+                }
+                else
+                {
+                  if( Dbit )
+                  {
+                    printf( "%s, %s\n", RegStr, RmStr);
+                  }
+                  else
+                  {
+                    printf( "%s, %s\n", RmStr ,RegStr);
+                  }
+                }
+
+              }break;
+
+              case(3):{
+                if( Wbit )
+                {
+                  RegStr = RegistersWide[RegValue];
+                  RmStr =  RegistersWide[RmValue];
+                }
+                else
+                {
+                  RegStr = RegistersSingle[RegValue];
+                  RmStr =  RegistersSingle[RmValue];
+                }
+                if( Dbit )
+                {
+                  printf( "%s, %s\n", RegStr, RmStr);
+                }
+                else
+                {
+                  printf( "%s, %s\n", RmStr, RegStr);
+                }
+              }break;
+            }
+          }
+          else
+          {
+#ifdef DEBUG
+            printf("Immediate to register/memory\n");
+            printf("Register/memoryto segment register\n");
+            printf("SegmentRegister to register/memory\n");
+#endif
+          }
+        }break;
+
+        case( 0b11000000 ):
+        {
+#ifdef DEBUG
+          printf("Immediate to register/memory\n");
+#endif
+        }break;
+
+        case( 0b10110000 ):
+        {
+          printf("mov ");
+          u8 ImmediateToRegisterREG = FirstEight &0b00000111;
+          u8 ImmediateToRegisterWBit = FirstEight&0b00001000;
+          if( ImmediateToRegisterWBit )
+          {
+            s16 *DataAddr = (s16 *)&ReadIn.Memory[inst_i+1];
+            s16 Data = *DataAddr;
+            const char *Register = RegistersWide[ImmediateToRegisterREG];
+            printf("%s, %d\n", Register, Data);
+            inst_i++;
+          }
+          else
+          {
+            s8 Data = SecondEight;
+            const char *Register = RegistersSingle[ImmediateToRegisterREG];
+            printf("%s, %d\n", Register, Data);
+          }
+        }break;
+
+        case( 0b10100000 ):
+        {
+#ifdef DEBUG
+          printf("Memory to accumulator\n");
+          printf("Accumulator to memory\n");
+#endif
+        }break;
+      }
+    }
+  }
+  else
+  {
+    LogFatal( ERROR, "Please provide a filename" );
+  }
+  return(0);
+}
