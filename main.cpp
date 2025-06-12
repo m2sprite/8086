@@ -18,15 +18,6 @@ typedef s32 b32;
 
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 
-void RMPrintDisp( const char *String, s16 Value ) {
-  printf("[%s", String);
-  if( Value < 0) {
-    printf(" - %d", -Value);
-  } else if (Value > 0 ) {
-    printf(" + %d", Value);
-  }
-  printf("]");
-}
 
 void PrintBinaryU8(u8 value)
 {
@@ -79,6 +70,7 @@ static const char **RegistersSingle = RegisterLut;
 
 static const char *ByteWordLut[2] = {BYTEStr, WORDStr};
 
+
 struct segmentedMemory_t {
   u8 *Memory;
   u32 Size;
@@ -113,9 +105,131 @@ segmentedMemory_t GiveMeMemoryFromFile( const char *FileName )
   return(Result);
 }
 
+void RMPrintDisp( const char *String, s16 Value ) {
+  printf("[%s", String);
+  if( Value < 0) {
+    printf(" - %d", -Value);
+  } else if (Value > 0 ) {
+    printf(" + %d", Value);
+  }
+  printf("]");
+}
+
+void ModSwitchWithReg( u8 ModField, u8 RegField, u8 RmField, u8 Wbit, u8 Dbit, u32 *inst_i, segmentedMemory_t ReadIn)
+{
+  const char *RmStr;
+  const char *RegStr;
+  switch( ModField )
+  {
+    case(0):
+    {
+      if( RmField != 6 )
+      {
+        RmStr = RmLut[RmField];
+        RegStr = Wbit ? RegistersWide[RegField] : RegistersSingle[RegField];
+        if( Dbit )
+        {
+          printf("%s",RegStr);
+          printf(", ");
+          RMPrintDisp( RmStr, 0);
+        }
+        else
+        {
+          RMPrintDisp( RmStr, 0);
+          printf(", ");
+          printf("%s",RegStr);
+        }
+      }
+      else
+      {
+        s16 *DispAddr = (s16 *)&ReadIn.Memory[(*inst_i)+2];
+        s16 DispValue = *DispAddr;
+        (*inst_i)+=2;
+        RegStr = Wbit ? RegistersWide[RegField] : RegistersSingle[RegField];
+        if( Dbit )
+        {
+          printf( "%s, [%d]", RegStr, DispValue);
+        }
+        else
+        {
+          printf( "[%d], %s", DispValue , RegStr);
+        }
+      }
+      printf("\n");
+    }break;
+
+    case(1):
+    {
+      s8 *DispAddr = (s8 *)&ReadIn.Memory[(*inst_i)+2];
+      s8 DispValue = *DispAddr;
+      (*inst_i)+=1;
+      RmStr =  RmLut[RmField];
+      RegStr = Wbit ? RegistersWide[RegField] : RegistersSingle[RegField];
+      if( Dbit )
+      {
+        printf("%s",RegStr);
+        printf(", ");
+        RMPrintDisp( RmStr, DispValue);
+      }
+      else
+      {
+        RMPrintDisp( RmStr, DispValue);
+        printf(", ");
+        printf("%s",RegStr);
+      }
+      printf("\n");
+    }break;
+
+    case(2):
+    {
+      s16 *DispAddr = (s16 *)&ReadIn.Memory[(*inst_i)+2];
+      s16 DispValue = *DispAddr;
+      (*inst_i)+=2;
+      RmStr =  RmLut[RmField];
+      RegStr = Wbit ? RegistersWide[RegField] : RegistersSingle[RegField];
+      if( Dbit )
+      {
+        printf("%s",RegStr);
+        printf(", ");
+        RMPrintDisp( RmStr, DispValue);
+      }
+      else
+      {
+        RMPrintDisp( RmStr, DispValue);
+        printf(", ");
+        printf("%s",RegStr);
+      }
+      printf("\n");
+    }break;
+
+    case(3):
+    {
+      if( Wbit )
+      {
+        RegStr = RegistersWide[RegField];
+        RmStr =  RegistersWide[RmField];
+      }
+      else
+      {
+        RegStr = RegistersSingle[RegField];
+        RmStr =  RegistersSingle[RmField];
+      }
+      if( Dbit )
+      {
+        printf( "%s, %s\n", RegStr, RmStr);
+      }
+      else
+      {
+        printf( "%s, %s\n", RmStr, RegStr);
+      }
+    }break;
+  }
+}
+
+
+
 int main( s32 ArgCount, char **Args )
 {
-
   SHIFT_ARGS( ArgCount , Args );
   if( ArgCount > 0 )
   {
@@ -128,124 +242,72 @@ int main( s32 ArgCount, char **Args )
       u8 SecondEight = ReadIn.Memory[inst_i+1];
       switch( FirstEight & 0b11110000 )
       {
+        case(0b00000000):{
+          printf("add ");
+          u8 Wbit = (FirstEight & W_MASK);
+          u8 ImmediateToAccumulator = (FirstEight & 0b00000100) >> 2;
+          if( ImmediateToAccumulator )
+          {
+            s16 Data = Wbit ? *(s16 *)&ReadIn.Memory[inst_i+1] : (s16)(*(s8 *)&ReadIn.Memory[inst_i+1]);
+            if( Wbit )
+            {
+              inst_i+=1;
+            }
+            printf( "Immediate To Accumulator ");
+            exit(21);
+          }
+          else
+          {
+            //REG/memory with register to either
+            u8 Dbit = (FirstEight & D_MASK) >> 1;
+            u8 Wbit = (FirstEight & W_MASK);
+            u8 ModField = (SecondEight & MOD_MASK) >> 6;
+            u8 RegField = (SecondEight & REG_MASK) >> 3;
+            u8 RmField = (SecondEight & RM_MASK);
+            ModSwitchWithReg( ModField, RegField, RmField, Wbit, Dbit, &inst_i, ReadIn );
+          }
+        }break;
+
+        case(0b00100000):{
+          printf("sub\n");
+
+        }break;
+
+        case(0b00110000): {
+          printf("cmp\n");
+
+        }break;
+
         case( 0b10000000 ):
         {
-          printf("mov ");
           //TODO: Register/memoryto/from register
-          if( (FirstEight & 0b00001100) == 0b00001000 )
+          if( (FirstEight & 0b01111100) == 0)
           {
-            u8 Dbit = FirstEight & D_MASK;
-            u8 Wbit = FirstEight & W_MASK;
-            u8 ModField = (SecondEight & MOD_MASK) >> 6;
-            u8 RegValue = (SecondEight & REG_MASK) >> 3;
-            u8 RmValue = (SecondEight & RM_MASK);
-            const char *RegStr;
-            const char *RmStr;
-            switch( ModField )
+            u8 OPCode = (SecondEight & 0b00111000) >> 3;
+            switch( OPCode )
             {
               case(0):{
-                // 00 no displacement
-                if( RmValue != 6 )
-                {
-                  RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
-                  RmStr =  RmLut[RmValue];
-                  if( Dbit )
-                  {
-                    printf("%s", RegStr);
-                    printf(", ");
-                    RMPrintDisp(RmStr,0);
-                  }
-                  else
-                  {
-                    RMPrintDisp(RmStr,0);
-                    printf(", ");
-                    printf("%s", RegStr);
-                  }
-                } else {
-                  //16 bit displacement
-                  s16 *DispAddr = (s16 *)&ReadIn.Memory[inst_i+2];
-                  s16 DispValue = *DispAddr;
-                  inst_i+=2;
-                  RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
-                  if( Dbit )
-                  {
-                    printf( "%s, [%d]", RegStr, DispValue);
-                  }
-                  else
-                  {
-                    printf( "[%d], %s", DispValue , RegStr);
-                  }
-                }
-                printf("\n");
+                printf("add\n");
               }break;
 
-              // 01 8 bit displacement
-              case(1):{
-                s8 *DispAddr = (s8 *)&ReadIn.Memory[inst_i+2];
-                s8 DispValue = *DispAddr;
-                inst_i+=1;
-
-                RmStr =  RmLut[RmValue];
-                RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
-
-                if( Dbit )
-                {
-                  printf("%s",RegStr);
-                  printf(", ");
-                  RMPrintDisp( RmStr, DispValue);
-                }
-                else
-                {
-                  RMPrintDisp( RmStr, DispValue);
-                  printf(", ");
-                  printf("%s",RegStr);
-                }
-                printf("\n");
+              case(5):{
+                printf("sub\n");
               }break;
 
-              // 10 16 bit displacement
-              case(2):{
-                s16 *DispAddr = (s16 *)&ReadIn.Memory[inst_i+2];
-                s16 DispValue = *DispAddr;
-                inst_i+=2;
-                RmStr =  RmLut[RmValue];
-                RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
-                if( Dbit )
-                {
-                  printf("%s",RegStr);
-                  printf(", ");
-                  RMPrintDisp( RmStr, DispValue);
-                }
-                else
-                {
-                  RMPrintDisp( RmStr, DispValue );
-                  printf(", ");
-                  printf("%s",RegStr);
-                }
-                printf("\n");
-              }break;
-
-              case(3):{
-                if( Wbit )
-                {
-                  RegStr = RegistersWide[RegValue];
-                  RmStr =  RegistersWide[RmValue];
-                }
-                else
-                {
-                  RegStr = RegistersSingle[RegValue];
-                  RmStr =  RegistersSingle[RmValue];
-                }
-                if( Dbit )
-                {
-                  printf( "%s, %s\n", RegStr, RmStr);
-                }
-                else
-                {
-                  printf( "%s, %s\n", RmStr, RegStr);
-                }
+              case(7):{
+                printf("cmp\n");
               }break;
             }
+          }
+          else if( (FirstEight & 0b00001100) == 0b00001000 )
+          {
+            printf("mov ");
+            u8 Dbit = (FirstEight & D_MASK) >> 1;
+            u8 Wbit = FirstEight & W_MASK;
+            u8 ModField = (SecondEight & MOD_MASK) >> 6;
+            u8 RegField = (SecondEight & REG_MASK) >> 3;
+            u8 RmField = (SecondEight & RM_MASK);
+            ModSwitchWithReg( ModField, RegField, RmField, Wbit, Dbit, &inst_i, ReadIn );
           }
           else if( (FirstEight & 0b00001111) == 0b00001110 )
           {
@@ -374,16 +436,16 @@ int main( s32 ArgCount, char **Args )
           printf("mov ");
           u8 DirectionCheck = (FirstEight & 0b00000010) >> 1;
           u8 Wbit = (FirstEight & W_MASK);
-          s16 Data = Wbit ? *(s16 *)&ReadIn.Memory[inst_i+1] : (s16)(*(s8 *)&ReadIn.Memory[inst_i+1]);
+          s16 Addr = Wbit ? *(s16 *)&ReadIn.Memory[inst_i+1] : (s16)(*(s8 *)&ReadIn.Memory[inst_i+1]);
+          inst_i+=1;
           if( DirectionCheck )
           {
-            printf("[%d], ax", Data);
+            printf("[%d], ax", Addr);
           }
           else
           {
-            printf("ax, [%d]", Data);
+            printf("ax, [%d]", Addr);
           }
-          inst_i+=1;
           printf("\n");
         }break;
       }
