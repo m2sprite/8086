@@ -117,7 +117,7 @@ int main( s32 ArgCount, char **Args )
 {
 
   SHIFT_ARGS( ArgCount , Args );
-  if( ArgCount > 0)
+  if( ArgCount > 0 )
   {
     char *AsmFileName = *Args;
     segmentedMemory_t ReadIn = GiveMeMemoryFromFile( AsmFileName );
@@ -169,13 +169,12 @@ int main( s32 ArgCount, char **Args )
                   RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
                   if( Dbit )
                   {
-                    printf( "%s [%d]", RegStr, DispValue);
+                    printf( "%s, [%d]", RegStr, DispValue);
                   }
                   else
                   {
-                    printf( "[%d] %s", DispValue , RegStr);
+                    printf( "[%d], %s", DispValue , RegStr);
                   }
-
                 }
                 printf("\n");
               }break;
@@ -372,10 +371,20 @@ int main( s32 ArgCount, char **Args )
 
         case( 0b10100000 ):
         {
-#ifdef DEBUG
-          printf("Memory to accumulator\n");
-          printf("Accumulator to memory\n");
-#endif
+          printf("mov ");
+          u8 DirectionCheck = (FirstEight & 0b00000010) >> 1;
+          u8 Wbit = (FirstEight & W_MASK);
+          s16 Data = Wbit ? *(s16 *)&ReadIn.Memory[inst_i+1] : (s16)(*(s8 *)&ReadIn.Memory[inst_i+1]);
+          if( DirectionCheck )
+          {
+            printf("[%d], ax", Data);
+          }
+          else
+          {
+            printf("ax, [%d]", Data);
+          }
+          inst_i+=1;
+          printf("\n");
         }break;
       }
     }
@@ -384,5 +393,6 @@ int main( s32 ArgCount, char **Args )
   {
     LogFatal( ERROR, "Please provide a filename" );
   }
+
   return(0);
 }
