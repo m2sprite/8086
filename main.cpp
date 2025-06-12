@@ -141,15 +141,14 @@ int main( s32 ArgCount, char **Args )
             u8 RmValue = (SecondEight & RM_MASK);
             const char *RegStr;
             const char *RmStr;
-            switch(ModField)
+            switch( ModField )
             {
               case(0):{
                 // 00 no displacement
-                if( RmValue != 5 )
+                if( RmValue != 6 )
                 {
-                  RmStr =  RmLut[RmValue];
                   RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
-
+                  RmStr =  RmLut[RmValue];
                   if( Dbit )
                   {
                     printf("%s", RegStr);
@@ -164,19 +163,19 @@ int main( s32 ArgCount, char **Args )
                   }
                 } else {
                   //16 bit displacement
-                  printf("HI\n");
                   s16 *DispAddr = (s16 *)&ReadIn.Memory[inst_i+2];
                   s16 DispValue = *DispAddr;
                   inst_i+=2;
                   RegStr = Wbit ? RegistersWide[RegValue] : RegistersSingle[RegValue];
                   if( Dbit )
                   {
-                    printf( "%s %d %d", RegStr, SecondEight, DispValue);
+                    printf( "%s [%d]", RegStr, DispValue);
                   }
                   else
                   {
-                    printf( "%d %d %s", SecondEight, DispValue , RegStr);
+                    printf( "[%d] %s", DispValue , RegStr);
                   }
+
                 }
                 printf("\n");
               }break;
@@ -272,7 +271,7 @@ int main( s32 ArgCount, char **Args )
           {
             //NO disp
             case(0):{
-              if( RmValue != 5 )
+              if( RmValue != 6 )
               {
                 if( Wbit )
                 {
@@ -294,7 +293,7 @@ int main( s32 ArgCount, char **Args )
               else
               {
                 //16 bit displacement
-                printf("immediate to register 16 bit disp not implemented");
+                printf("immediate to register 16 bit disp not implemented in no disp case");
                 exit(21);
               }
             }break;
