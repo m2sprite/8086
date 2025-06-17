@@ -107,7 +107,6 @@ const char *JaStr = "ja";
 const char *JnpStr = "jnp";
 const char *JpoStr = "jpo";
 const char *JnoStr = "jno";
-const char *RetStr = "ret";
 const char *JnsStr = "jns";
 const char *LoopStr = "loop";
 const char *LoopzStr = "loopz";
@@ -131,25 +130,42 @@ const char *EscStr = "esc";
 const char *LockStr = "lock";
 const char *SegmentStr = "segment";
 
+/*
 void PopulateLiterals()
 {
-  LitteralsLut[0b100010] = MovStr;//dw
-  LitteralsLut[0b1100011] = MovStr; //w
-  LitteralsLut[0b1011] = MovStr;//w reg
-  LitteralsLut[0b1010000] = MovStr;//w
-  LitteralsLut[0b1010001] = MovStr;//w
+  LitteralsLut[0b100010] = MovStr;
+  LitteralsLut[0b1100011] = MovStr;
+  LitteralsLut[0b1011] = MovStr;
+  LitteralsLut[0b1010000] = MovStr;
+  LitteralsLut[0b1010001] = MovStr;
   LitteralsLut[0b10101110] = MovStr;
   LitteralsLut[0b10101100] = MovStr;
 
+  //COLISION
   LitteralsLut[0b11111111] = PushStr;
+  // Indirect within segment
+  LitteralsLut[0b11111111] = CallStr;
+  // Indirect intersegment
+  LitteralsLut[0b11111111] = CallStr;
+  // Indirect with segment short
+  LitteralsLut[0b11111111] = JmpStr;
+  // Indirect intersegment
+  LitteralsLut[0b11111111] = JmpStr;
+
+
   LitteralsLut[0b01010] = PushStr;//reg
 
   LitteralsLut[0b10001111] = PopStr;
+
   LitteralsLut[0b01011] = PushStr;//reg
 
-  //TODO:colision start reg is in middle
+  //NOTE: this has reg in middle
   LitteralsLut[0b000110] = PushStr;// segment
+
+  //this is normal
   LitteralsLut[0b000110] = SbbStr;
+
+  //NOTE: this has reg in middle
   LitteralsLut[0b000111] = PopStr;// segment //need to branch
   //Collisions
   LitteralsLut[0b100000] = AddStr;
@@ -167,6 +183,7 @@ void PopulateLiterals()
   LitteralsLut[0b1111011] = DivStr;
   LitteralsLut[0b1111011] = IdivStr;
   LitteralsLut[0b1111011] = NotStr;
+  LitteralsLut[0b1111011]  = TestStr;
 
   //Doulbe
   LitteralsLut[0b110100] = ShlStr;
@@ -174,6 +191,9 @@ void PopulateLiterals()
   LitteralsLut[0b110100] = ShrStr;
   LitteralsLut[0b110100] = SarStr;
   LitteralsLut[0b110100] = RolStr;
+  LitteralsLut[0b110100] = RorStr;
+  LitteralsLut[0b110100] = RclStr;
+  LitteralsLut[0b110100] = RcrStr;
 
   LitteralsLut[0b1000011] = XChgStr;// w
   LitteralsLut[0b10010] = XChgStr;// reg
@@ -196,7 +216,10 @@ void PopulateLiterals()
   LitteralsLut[0b000000] = AddStr;
   LitteralsLut[0b0000010] = AddStr;
 
+  //COLISSION
   LitteralsLut[0b000100] = AdcStr;
+  LitteralsLut[0b000100]  = TestStr;
+
   LitteralsLut[0b0001010] = AdcStr;
 
   LitteralsLut[0b01000] = IncStr;
@@ -222,14 +245,177 @@ void PopulateLiterals()
 
   LitteralsLut[0b10011000] = CbwStr;
   LitteralsLut[0b10011001] = CwdStr;
+  LitteralsLut[0b001000]  = AndStr;
 
+  //COLISSION
+  LitteralsLut[0b1000000]  = AndStr;
+  LitteralsLut[0b1000000] = OrStr;
+
+  LitteralsLut[0b0010010]  = AndStr;
+  LitteralsLut[0b1010100]  = TestStr;
+
+  LitteralsLut[0b000010] = OrStr;
+  LitteralsLut[0b0000110] = OrStr;
+
+  LitteralsLut[0b001100] = XorStr;
+
+  //COLISSION
+  //TODO: HOW DO WE TELL THESE APART there is a w bit set
+  LitteralsLut[0b0011010] = XorStr; //IMEDIATE TO REGISTER
+  LitteralsLut[0b0011010] = XorStr; //IMMEDIATE TO ACCUM
+
+  LitteralsLut[0b1111001] = RepStr;
+  LitteralsLut[0b1010010] = MovsStr;
+  LitteralsLut[0b1010011] = CmpsStr;
+  LitteralsLut[0b1010111] = ScasStr;
+  LitteralsLut[0b1010110] = LodsStr;
+  LitteralsLut[0b1010101] = StdsStr;
+
+  LitteralsLut[0b11101000] = CallStr;
+  LitteralsLut[0b10011010] = CallStr;
+
+  LitteralsLut[0b11101001] = JmpStr;
+  LitteralsLut[0b11101011] = JmpStr;
+  LitteralsLut[0b11101010] = JmpStr;
+}
+*/
+
+struct memory_t {
+  u8 *Memory;
+  u32 Size;
+};
+
+memory_t GiveMeMemoryFromFile( const char *FileName )
+{
+  static u8 FailedAllocationByte;
+  memory_t Result = {};
+  FILE *File = fopen( FileName, "rb" );
+  u8 *Memory;
+  if( File )
+  {
+    fseek(File, 0, SEEK_END);
+    u32 BytesToAlloc = ftell(File);
+    rewind(File);
+    Memory = (u8 *)malloc( BytesToAlloc * sizeof(u8));
+    if(!Memory)
+    {
+      Result.Size = 0;
+      Result.Memory = &FailedAllocationByte;
+      Log( ERROR, "Failed to allocate memory");
+    } else {
+      Result.Size = BytesToAlloc;
+      fread(Memory, 1, BytesToAlloc, File);
+      Result.Memory = Memory;
+    }
+    fclose(File);
+  } else {
+    LogFatal( ERROR, "No binary provided");
+  }
+  return(Result);
 }
 
-int main(void)
-{
-  PopulateLiterals();
+static const char *NormalRegistersWide[] = {
+  "ax",
+  "cx",
+  "dx",
+  "bx",
+  "sp",
+  "bp",
+  "si",
+  "di"
+};
 
-  /*
+static const char *NormalRegistersNotWide[] = {
+  "al",
+  "cl",
+  "dl",
+  "bl",
+  "ah",
+  "ch",
+  "dh",
+  "bh"
+};
+
+const char *GetReg( u8 Wbit, u8 Code )
+{
+  const char *Result;
+  if( Wbit)
+  {
+    Result = NormalRegistersWide[Code];
+  }
+  else
+  {
+    Result = NormalRegistersNotWide[Code];
+  }
+  return Result;
+}
+
+static const char *EARMSWITCH[] = {
+  "bx + si",
+  "bx + di",
+  "bp + si",
+  "bp + di",
+  "si",
+  "di",
+  "direct addr",
+  "bp",
+};
+
+
+void Normal( const char *OpStr, u8 Dbit, u8 Wbit, size_t *inst_i, u8 *Buffer )
+{
+  size_t at = *inst_i;
+  u8 ModField = (Buffer[at+1] & 0b11000000) >> 6;
+  u8 RegField = (Buffer[at+1] & 0b00111000) >> 3;
+  u8 RmField = (Buffer[at+1] & 0b00000111);
+
+  const char *Src;
+  const char *Dest;
+
+  switch(ModField)
+  {
+    case(0)
+    {
+      if( RmField == 6 ) {
+
+
+      } else {
+        Src = EARMSWITCH(RmField);
+      }
+    }break; //EA
+
+    case(1)
+    {
+
+    }break; //EA 8 disp
+
+    case(2)
+    {
+
+
+    }break; //EA 16 disp
+
+    //RM IS ALSO A NORMALREGISTER
+    case(3)
+    {
+      RmStr = GetReg( Wbit, RmField );
+      RegStr = GetReg( Wbit, RegField );
+    }break;
+  }
+
+  const char *Temp;
+
+  if(Dbit) {
+    Temp = Src;
+    Src = Dest;
+    Dest = Src;
+  }
+
+  printf( "%s %s %s\n", OpStr, Dest, Src);
+}
+
+int main( int ArgCount, char **Args)
+{
   SHIFT_ARGS( ArgCount , Args );
   if( ArgCount > 0 )
   {
@@ -237,38 +423,44 @@ int main(void)
     memory_t ReadIn = GiveMeMemoryFromFile( AsmFileName );
     printf("bits 16\n");
     s32 BytesLeft = ReadIn.Size;
-    while(BytesLeft > 0)
+    for(size_t inst_i =0; inst_i < ReadIn.Size;)
     {
       u8 Byte = ReadIn.Memory[inst_i];
-      u8 FirstBit = Byte & 0b10000000;
-      if( FirstBit )
+      u8 FirstFour = (Byte&0b11110000) >> 4;
+      u8 SecondFour = (Byte&0b00001111);
+      switch( FirstFour )
       {
-        u8 SecondBit = Byte & 0b01000000;
-        if( SecondBit )
-        {
-          u8 ThirdBit = Byte & 0b01000000;
+        case(0):{
+          switch( SecondFour )
+          {
+            case(0x00):{
+              AddNormal( 0, 0, &inst_i );
+            }break;
 
+            case(0x01):{
+            }break;
 
-        }
-        else
-        {
+            case(0x02):{
+            }break;
 
-        }
+            case(0x03):{
+            }break;
+
+            case(0x04):{
+            }break;
+
+            case(0x05):{
+            }break;
+
+            case(0x06):{
+            }break;
+
+            case(0x07):{
+            }break;
+
+          }
+        }break;
       }
-      else
-      {
-        u8 SecondBit = Byte & 0b01000000;
-        if( SecondBit )
-        {
-
-        }
-        else
-        {
-
-        }
-      }
-      --BytesLeft;
     }
   }
-  */
 }
