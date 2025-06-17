@@ -22,45 +22,6 @@ typedef s32 b32;
 #define REG_MASK      0b00111000
 #define RM_MASK       0b00000111
 
-
-
-/*
-const char *Al = "al";
-const char *Cl = "cl";
-const char *Dl = "dl";
-const char *Bl = "bl";
-const char *Ah = "ah";
-const char *Ch = "ch";
-const char *Dh = "dh";
-const char *Bh = "bh";
-
-const char *Ax = "ax";
-const char *Cx = "cx";
-const char *Dx = "dx";
-const char *Bx = "bx";
-const char *Sp = "sp";
-const char *Bp = "bp";
-const char *Si = "si";
-const char *Di = "di";
-
-const char *RmBxSi = "bx + si";
-const char *RmBxDi = "bx + di";
-const char *RmBpSi = "bp + si";
-const char *RmBpDi = "bp + di";
-const char *RmSi = "si";
-const char *RmDi = "di";
-const char *RmBp = "bp";
-const char *RmBx = "bx";
-
-const char *BYTEStr = "byte";
-const char *WORDStr = "word";
-
-static const char *RmLut[8] = {RmBxSi, RmBxDi, RmBpSi, RmBpDi, RmSi, RmDi, RmBp, RmBx};
-static const char *RegisterLut[16] = { Al, Cl, Dl, Bl, Ah, Ch, Dh, Bh, Ax, Cx, Dx, Bx, Sp, Bp, Si, Di };
-static const char **RegistersWide = &(RegisterLut[8]);
-static const char **RegistersSingle = RegisterLut;
-*/
-
 static const char *LitteralsLut[1024];
 
 const char *MovStr = "mov"; //done
@@ -205,6 +166,14 @@ void PopulateLiterals()
   LitteralsLut[0b1111011] = ImulStr;
   LitteralsLut[0b1111011] = DivStr;
   LitteralsLut[0b1111011] = IdivStr;
+  LitteralsLut[0b1111011] = NotStr;
+
+  //Doulbe
+  LitteralsLut[0b110100] = ShlStr;
+  LitteralsLut[0b110100] = ShaStr;
+  LitteralsLut[0b110100] = ShrStr;
+  LitteralsLut[0b110100] = SarStr;
+  LitteralsLut[0b110100] = RolStr;
 
   LitteralsLut[0b1000011] = XChgStr;// w
   LitteralsLut[0b10010] = XChgStr;// reg
@@ -253,7 +222,6 @@ void PopulateLiterals()
 
   LitteralsLut[0b10011000] = CbwStr;
   LitteralsLut[0b10011001] = CwdStr;
-
 
 }
 
